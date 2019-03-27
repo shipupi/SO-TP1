@@ -17,12 +17,11 @@ int main (int argc, char *argv[]){
 	// Variable definitions
 	char *buf;
 	char *fileName;
-	fileName = malloc(fileNameSize);
-	buf = malloc(bufferSize);
-
+	fileName = calloc(fileNameSize,fileNameSize);
+	buf = calloc(bufferSize, bufferSize);
 	read(STDIN_FILENO, fileName, fileNameSize);
 	hashFile(argv[0], fileName, buf);
-	printf("%s\n", buf);
+	printf("%s", buf);
 
 	// Free resources
 	free(buf);
