@@ -1,10 +1,11 @@
 
 echo "Starting compilation..."
 
-gcc -Wall  -g -c slave.c view.c hashfiles.c
-gcc -g  -Wall slave.o -o slave.fl
+gcc -Wall  -g -c slave.c view.c hashfiles.c sem_slave.c
+gcc -g  -Wall sem_slave.o -lpthread -o sem_slave.fl
+gcc -g  -Wall slave.o -lpthread -o slave.fl
 gcc -g  -Wall view.o -o view.fl
-gcc -g  -Wall hashfiles.o -o hashfiles.fl
+gcc -g  -Wall hashfiles.o -lpthread -o hashfiles.fl
 printf "Compilation Done!\n\n"
 rm -f *.o
 
@@ -67,6 +68,6 @@ else
 
 	# Regular Commands
 	printf "Running program \n\n"
-	./hashfiles.fl
+	./hashfiles.fl *
 fi
 
