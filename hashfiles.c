@@ -14,13 +14,14 @@ void killChild(pid_t pid);
 void killChilds(pid_t pids[], int numberOfSlaves);
 
 
-static const int bufferSize = 2000;
+static const int bufferSize = 512;
+static const int fileNameSize = 512;
 
 int main (int argc, char *argv[]){
   
 
   // Init variables
-  int numberOfSlaves = 1;
+  int numberOfSlaves = 5;
   pid_t slaveIds[numberOfSlaves];
 
   int totalFiles = argc - 1;
@@ -45,28 +46,28 @@ int main (int argc, char *argv[]){
   }
   printf("\n");
   // Semaphore init
-  sem_t *pipeReadySemaphore = sem_open("pipeReadySemaphore", O_CREAT, 0644, 0);
+  sem_t *filePipeReadySemaphore = sem_open("filePipeReadySemaphore", O_CREAT, 0644, 0);
   sem_t *fileAvailableSemaphore = sem_open("fileAvailableSemaphore", O_CREAT, 0644, 0);
-  sem_post(pipeReadySemaphore);
+  sem_post(filePipeReadySemaphore);
   // Create slaves
   createSlaves(argv[0], numberOfSlaves, hashPipe, filePipe, requestPipe, slaveIds);
 
 
 
   // Main Loop
-  printf("Remaining files: %d\n", remainingFiles);
+  // printf("Remaining files: %d\n", remainingFiles);
 
   while(remainingFiles > 0) {
     // Wait for file request
     read(requestPipe[0], tmp, 1);
 
     // Wait for pipe to be ready
-    printf("A file was requested\n");
-    sem_wait(pipeReadySemaphore);
-    printf("Pipe is Ready! Writing to filePipe\n");
+    // printf("A file was requested\n");
+    sem_wait(filePipeReadySemaphore);
+    // printf("Pipe is Ready! Writing to filePipe\n");
 
     // Write into the filepipe
-    write(filePipe[1], argv[argIndex], strlen(argv[argIndex]) + 1);
+    write(filePipe[1], argv[argIndex], fileNameSize);
 
     // Post to the fileavailable semaphore
     sem_post(fileAvailableSemaphore);
@@ -74,7 +75,7 @@ int main (int argc, char *argv[]){
     // Decrease remaining files
     remainingFiles--;
     argIndex++;
-    printf("Remaining files: %d\n", remainingFiles);
+    // printf("Remaining files: %d\n", remainingFiles);
   }
 
 
@@ -89,7 +90,10 @@ int main (int argc, char *argv[]){
   killChilds(slaveIds, numberOfSlaves);
   close(hashPipe[0]);
   close(filePipe[1]);
+  close(requestPipe[0]);
   free(buf);
+  sem_close(filePipeReadySemaphore);
+  sem_close(fileAvailableSemaphore);
 
   return 0;
 }

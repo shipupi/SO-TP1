@@ -9,8 +9,8 @@
 
 
 static const char md5Path[] = "/usr/bin/md5sum";
-static const int bufferSize = 2000;
-static const int fileNameSize = 500;
+static const int bufferSize = 512;
+static const int fileNameSize = 512;
 
 
 int hashFile(char *myPath, char *pathToFile, char *buffer);
@@ -20,10 +20,10 @@ int hashFile(char *myPath, char *pathToFile, char *buffer);
 Pipes in slave:
 
 
-0 FILEPIPE    R
-1 HASHPIPE    W
-2 STDERR      W
-3 REQUESTPIPE W
+0 FILEPIPE    R ( Receives file names to hash )
+1 HASHPIPE    W ( Sends hash values back to parent)
+2 STDERR      W ( For debug )
+3 REQUESTPIPE W ( Signal that child is ready to hash)
 
 */
 
@@ -31,16 +31,16 @@ Pipes in slave:
 int main (int argc, char *argv[]){
 
 // Semaphore init
-  sem_t *pipeReadySemaphore = sem_open("pipeReadySemaphore", O_RDWR);
+  sem_t *filePipeReadySemaphore = sem_open("filePipeReadySemaphore", O_RDWR);
   sem_t *fileAvailableSemaphore = sem_open("fileAvailableSemaphore", O_RDWR);
 
 // Variable definitions
   char *buf;
   char *fileName;
-  fileName = calloc(fileNameSize,fileNameSize);
-  buf = calloc(bufferSize, bufferSize);
 
   while(1) {
+    fileName = calloc(fileNameSize,fileNameSize);
+    buf = calloc(bufferSize, bufferSize);
     // Request file
     // printf("Slave Requesting File\n");
     write(3,"",1);
@@ -48,17 +48,14 @@ int main (int argc, char *argv[]){
     // Wait for an available file
     sem_wait(fileAvailableSemaphore);
     read(STDIN_FILENO, fileName, fileNameSize);
-    sem_post(pipeReadySemaphore);
-    // printf("hashing file: %s\n", fileName); 
+    sem_post(filePipeReadySemaphore);
     hashFile(argv[0], fileName, buf);
-    // printf("File is hashed: %s\n", buf);
     write(1, buf,bufferSize);
+    free(buf);
+    free(fileName);
   }
 
 // Free resources
-  free(buf);
-  free(fileName);
-
   return 0;
 }
 
@@ -78,9 +75,12 @@ int hashFile(char *myPath, char *pathToFile, char *buffer) {
 
 // HIJO
 
-// Redirect stdOut to pipe
+// Redirect stdOut to pipe and stdErr to pipe
     close(1);
+    close(2);
     dup(p[1]);
+    dup(p[1]);
+
     close(p[0]);
     close(p[1]);
 
