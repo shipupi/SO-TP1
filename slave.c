@@ -79,6 +79,7 @@ int main (int argc, char *argv[]){
       // fprintf(stderr, "%d: %s\n", getpid(), buf);
       memset(buf,0,bufferSize);
       processedFiles++;
+      free(fileNames[i]);
     }
 
   }

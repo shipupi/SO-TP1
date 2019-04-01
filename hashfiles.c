@@ -44,8 +44,9 @@ int main (int argc, char *argv[]){
   }
   printf("\n");
   // Semaphore init
-  sem_t *filePipeReadySemaphore = sem_open("filePipeReadySemaphore", O_CREAT, 0644, 0);
-  sem_post(filePipeReadySemaphore);
+  // Lo cierro por las dudas para no tener conflictos con alguno q estaba existiendo de antes
+  sem_unlink("filePipeReadySemaphore");
+  sem_t *filePipeReadySemaphore = sem_open("filePipeReadySemaphore", O_CREAT, 0644, 1);
   // Create slaves
   createSlaves(argv[0], numberOfSlaves, hashPipe, filePipe, slaveIds);
 
@@ -105,6 +106,7 @@ int main (int argc, char *argv[]){
   close(filePipe[1]);
   free(buf);
   sem_close(filePipeReadySemaphore);
+  sem_unlink("filePipeReadySemaphore");
 
   return 0;
 }
