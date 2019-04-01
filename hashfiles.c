@@ -9,7 +9,7 @@
 #include <semaphore.h>
 #include <signal.h>
 
-void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe[], int requestPipe[],pid_t slaveIds[]);
+void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe[],pid_t slaveIds[]);
 void killChild(pid_t pid);
 void killChilds(pid_t pids[], int numberOfSlaves);
 
@@ -22,20 +22,18 @@ int main (int argc, char *argv[]){
 
   // Init variables
   int numberOfSlaves = 5;
+  int filesPerSlave = 3;
   pid_t slaveIds[numberOfSlaves];
-
   int totalFiles = argc - 1;
   int remainingFiles = totalFiles;
   int readyFiles = 0;
 
   int argIndex = 1;
-  int i;
-  char *tmp[1];
+  int i, currSon;
   char *buf;
   buf = calloc(bufferSize, bufferSize);
   // Init pipes
-  int hashPipe[2], filePipe[2], requestPipe[2];
-  pipe(requestPipe);
+  int hashPipe[2], filePipe[2];
   pipe(hashPipe);
   pipe(filePipe);
 
@@ -47,42 +45,57 @@ int main (int argc, char *argv[]){
   printf("\n");
   // Semaphore init
   sem_t *filePipeReadySemaphore = sem_open("filePipeReadySemaphore", O_CREAT, 0644, 0);
-  sem_t *fileAvailableSemaphore = sem_open("fileAvailableSemaphore", O_CREAT, 0644, 0);
   sem_post(filePipeReadySemaphore);
   // Create slaves
-  createSlaves(argv[0], numberOfSlaves, hashPipe, filePipe, requestPipe, slaveIds);
+  createSlaves(argv[0], numberOfSlaves, hashPipe, filePipe, slaveIds);
 
 
 
   // Main Loop
   // printf("Remaining files: %d\n", remainingFiles);
+  int son = 0;
 
   while(remainingFiles > 0) {
-    // Wait for file request
-    read(requestPipe[0], tmp, 1);
 
-    // Wait for pipe to be ready
-    // printf("A file was requested\n");
-    sem_wait(filePipeReadySemaphore);
-    // printf("Pipe is Ready! Writing to filePipe\n");
+    // Write first wave of files ( N per Son)
+    for (currSon = 0; currSon < numberOfSlaves; ++currSon)
+    {
+      for (i = 0; i < filesPerSlave; ++i)
+      {
+        if (remainingFiles > 0) {
+          // fprintf(stderr, "remainingFiles: %d\n", remainingFiles);
+          write(filePipe[1], argv[argIndex], fileNameSize);
+          // Decrease remaining files and increase current arg
+          fprintf(stderr, "Sent to son %d: %s\n", son, argv[argIndex]);
+          remainingFiles--;
+          argIndex++;
+        }
+      }
+      // Write a separator
+      write(filePipe[1], "\0", fileNameSize);
+      son++;
+    }
 
-    // Write into the filepipe
-    write(filePipe[1], argv[argIndex], fileNameSize);
-
-    // Post to the fileavailable semaphore
-    sem_post(fileAvailableSemaphore);
-
-    // Decrease remaining files
-    remainingFiles--;
-    argIndex++;
-    // printf("Remaining files: %d\n", remainingFiles);
+    // Release all the remaining files one at a time per son
+    while (remainingFiles > 0) {
+      // Write the file
+      write(filePipe[1], argv[argIndex], fileNameSize);
+      // Write a separator
+      write(filePipe[1], "\0", fileNameSize);
+      fprintf(stderr, "Sent to son %d: %s\n", son, argv[argIndex]);
+      son++;
+      remainingFiles--;
+      argIndex++;
+    }
   }
 
+
+  // All files are sent, now wait for files to complete
 
   while(readyFiles < totalFiles) {
     read(hashPipe[0], buf, bufferSize);
     readyFiles++;
-    printf("%s",buf);
+    // printf("%s",buf);
   }
 
 
@@ -90,17 +103,15 @@ int main (int argc, char *argv[]){
   killChilds(slaveIds, numberOfSlaves);
   close(hashPipe[0]);
   close(filePipe[1]);
-  close(requestPipe[0]);
   free(buf);
   sem_close(filePipeReadySemaphore);
-  sem_close(fileAvailableSemaphore);
 
   return 0;
 }
 
 
 
-void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe[], int requestPipe[],pid_t slaveIds[]) {
+void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe[],pid_t slaveIds[]) {
 
 // All slaves will read and write from the same pipes
 
@@ -112,17 +123,16 @@ void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe
       perror("Error en fork");
       exit(EXIT_FAILURE);
     } else if (id == 0) {
+
+
+
       // redirect filePipe to stdIn
       close(0);
       dup(filePipe[0]);
-      close(requestPipe[0]);
-      dup(requestPipe[1]);
-      close(requestPipe[1]);
       close(filePipe[0]);
       close(filePipe[1]);
-      close(hashPipe[0]);
       // redirect hashPipe to stdOut
-      // For testing purposes, leave stdOut to check if everything is working correctly
+      close(hashPipe[0]);
       close(1);
       dup(hashPipe[1]);
       close(hashPipe[1]);

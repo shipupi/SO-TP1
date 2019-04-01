@@ -6,6 +6,7 @@
 #include <fcntl.h>           /* For O_* constants */
 #include <sys/stat.h>        /* For mode constants */
 #include <semaphore.h>
+#include <string.h>
 
 
 static const char md5Path[] = "/usr/bin/md5sum";
@@ -32,28 +33,57 @@ int main (int argc, char *argv[]){
 
 // Semaphore init
   sem_t *filePipeReadySemaphore = sem_open("filePipeReadySemaphore", O_RDWR);
-  sem_t *fileAvailableSemaphore = sem_open("fileAvailableSemaphore", O_RDWR);
 
 // Variable definitions
   char *buf;
+  buf = calloc(bufferSize, bufferSize);
   char *fileName;
-
+  fileName = calloc(fileNameSize,fileNameSize);
+  char *fileNames[100];
+  int currentFilename = 0;
+  int processedFiles = 0;
   while(1) {
-    fileName = calloc(fileNameSize,fileNameSize);
-    buf = calloc(bufferSize, bufferSize);
     // Request file
-    // printf("Slave Requesting File\n");
-    write(3,"",1);
+    // Wait for pipe use
+    sem_wait(filePipeReadySemaphore);
+    // printf("Slave Requesting File2\n");
 
-    // Wait for an available file
-    sem_wait(fileAvailableSemaphore);
-    read(STDIN_FILENO, fileName, fileNameSize);
+    // Read ALL The files in the pipe (until a read is null?)
+
+    do {
+      
+      memset(fileName, 0, fileNameSize);
+      read(STDIN_FILENO, fileName, fileNameSize);
+      if (fileName[0] != '\0') {
+        fileNames[currentFilename] = malloc(fileNameSize);
+        strcpy(fileNames[currentFilename], fileName);
+        fprintf(stderr, "%d: %s\n", getpid(), fileName);
+        currentFilename++;
+      } else {
+
+      }
+    } while (fileName[0] != '\0');
+
+    // Unlock the pipe
     sem_post(filePipeReadySemaphore);
-    hashFile(argv[0], fileName, buf);
-    write(1, buf,bufferSize);
-    free(buf);
-    free(fileName);
+
+    // Hash
+    // fprintf(stderr, "processedFiles: %d, currentFilename: %d\n", processedFiles, currentFilename);
+    for (int i = processedFiles; i < currentFilename; ++i)
+    {
+      // fprintf(stderr, "i: %d. currentFilename: %d\n", i, currentFilename);
+      hashFile(argv[0], fileNames[i], buf);
+      // Return to parent
+      write(1, buf,bufferSize);
+      // Cleanup
+      // fprintf(stderr, "%d: %s\n", getpid(), buf);
+      memset(buf,0,bufferSize);
+      processedFiles++;
+    }
+
   }
+  free(fileName);
+  free(buf);
 
 // Free resources
   return 0;
