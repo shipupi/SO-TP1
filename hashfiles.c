@@ -8,6 +8,9 @@
 #include <sys/stat.h>        /* For mode constants */
 #include <semaphore.h>
 #include <signal.h>
+#include <sys/shm.h>          /* For share memory*/
+
+#define SHSIZE 100
 
 void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe[],pid_t slaveIds[]);
 void killChild(pid_t pid);
@@ -32,6 +35,33 @@ int main (int argc, char *argv[]){
   int i, currSon;
   char *buf;
   buf = calloc(bufferSize, bufferSize);
+
+  int shmid;
+  key_t key;
+  char  * shm;
+  char * s;
+
+  // share memory set up
+  key = 9876;
+
+  shmid = shmget(key,SHSIZE,IPC_CREAT | 0666);
+
+  if(shmid < 0){
+    perror("shmget");
+    exit(1);
+  }
+
+  shm = shmat(shmid,NULL,0);
+  if(shm== (char *)-1){
+    perror("shmat");
+    exit(1);
+  }
+
+  
+  printf("copie en memo\n");
+  
+
+
   // Init pipes
   int hashPipe[2], filePipe[2];
   pipe(hashPipe);
@@ -39,6 +69,7 @@ int main (int argc, char *argv[]){
 
 
   printf("Printing arguments for test: \n\n");
+
   for (i = 0; i < argc; i++) { 
     printf("%s\n", argv[i]);
   }
@@ -70,8 +101,12 @@ int main (int argc, char *argv[]){
           fprintf(stderr, "Sent to son %d: %s\n", son, argv[argIndex]);
           remainingFiles--;
           argIndex++;
+
         }
       }
+
+      // terminar impresion 
+      *shm = 9;
       // Write a separator
       write(filePipe[1], "\0", fileNameSize);
       son++;
@@ -97,6 +132,10 @@ int main (int argc, char *argv[]){
     read(hashPipe[0], buf, bufferSize);
     readyFiles++;
     // printf("%s",buf);
+    memcpy(shm,buf,bufferSize);
+    s=shm;
+    s+=bufferSize;
+    *s=0;
   }
 
 
@@ -108,6 +147,9 @@ int main (int argc, char *argv[]){
   sem_close(filePipeReadySemaphore);
   sem_unlink("filePipeReadySemaphore");
 
+
+  s=shm;
+  *s=0;
   return 0;
 }
 
@@ -152,6 +194,7 @@ void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe
 
   close(filePipe[0]);
   close(hashPipe[1]);
+
   return;
 }
 
