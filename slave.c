@@ -58,7 +58,6 @@ int main (int argc, char *argv[]){
       if (fileName[0] != '\0') {
         fileNames[currentFilename] = malloc(fileNameSize);
         strcpy(fileNames[currentFilename], fileName);
-        fprintf(stderr, "%d: %s\n", getpid(), fileName);
         currentFilename++;
       } else {
 

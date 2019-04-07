@@ -8,6 +8,9 @@
 #include <sys/stat.h>        /* For mode constants */
 #include <semaphore.h>
 #include <signal.h>
+#include <sys/shm.h>          /* For share memory*/
+
+#define SHSIZE 100
 
 void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe[],pid_t slaveIds[]);
 void killChild(pid_t pid);
@@ -21,7 +24,7 @@ int main (int argc, char *argv[]){
   
 
   // Init variables
-  int numberOfSlaves = 3;
+  int numberOfSlaves = 1;
   int filesPerSlave = 2;
   pid_t slaveIds[numberOfSlaves];
   int totalFiles = argc - 1;
@@ -32,29 +35,46 @@ int main (int argc, char *argv[]){
   int i, currSon;
   char *buf = calloc(bufferSize, bufferSize);
   char *toPassString = calloc(fileNameSize, fileNameSize);
+  buf = calloc(bufferSize, bufferSize);
+
+
+  // share memory set up
+  key_t key = ftok("./hashfiles.fl",1337); 
+  if(key == -1){
+    perror("ftok");
+    exit(1);
+  }
+  int shmid;
+  char  * shm;
+  char * s;
+  
+
+  shmid = shmget(key,SHSIZE,IPC_EXCL | IPC_CREAT);
+  if(shmid < 0){
+    perror("shmget");
+    exit(1);
+  }
+
+  shm = shmat(shmid,NULL,0);
+  memset(shm, 0, SHSIZE);
+  if(shm == (char *)-1){
+    perror("shmat");
+    exit(1);
+  }
+  
   // Init pipes
   int hashPipe[2], filePipe[2];
   pipe(hashPipe);
   pipe(filePipe);
 
-
-  printf("Printing arguments for test: \n\n");
-  for (i = 0; i < argc; i++) { 
-    printf("%s\n", argv[i]);
-  }
-  printf("\n");
   // Semaphore init
-  // Lo cierro por las dudas para no tener conflictos con alguno q estaba existiendo de antes
+  // Closing the semaphore to avoid previous non-closed semaphores conflicts
   sem_unlink("filePipeReadySemaphore");
   sem_t *filePipeReadySemaphore = sem_open("filePipeReadySemaphore", O_CREAT, 0644, 1);
   // Create slaves
   createSlaves(argv[0], numberOfSlaves, hashPipe, filePipe, slaveIds);
 
-
-
-  // Main Loop
-  // printf("Remaining files: %d\n", remainingFiles);
-  int son = 0;
+  // Sending initial load
   while(remainingFiles > 0) {
 
     // Write first wave of files ( N per Son)
@@ -69,14 +89,13 @@ int main (int argc, char *argv[]){
           write(filePipe[1], toPassString, fileNameSize);
           memset(toPassString,'\0',fileNameSize);
           // Decrease remaining files and increase current arg
-          fprintf(stderr, "Sent to son %d: %s\n", son, argv[argIndex]);
           remainingFiles--;
           argIndex++;
+
         }
       }
       // Write a separator
       write(filePipe[1], "\0", fileNameSize);
-      son++;
     }
 
     // Release all the remaining files one at a time per son
@@ -87,8 +106,6 @@ int main (int argc, char *argv[]){
       memset(toPassString,'\0',fileNameSize);
       // Write a separator
       write(filePipe[1], "\0", fileNameSize);
-      fprintf(stderr, "Sent to son %d: %s\n", son, argv[argIndex]);
-      son++;
       remainingFiles--;
       argIndex++;
     }
@@ -96,11 +113,14 @@ int main (int argc, char *argv[]){
 
 
   // All files are sent, now wait for files to complete
-
+  sleep(5); // wait for view
+  fprintf(stderr, "%s\n", "now...");
   while(readyFiles < totalFiles) {
     read(hashPipe[0], buf, bufferSize);
     readyFiles++;
-    // printf("%s",buf);
+    fprintf(stderr, "(padre)%s",buf);
+    memcpy(s,buf,bufferSize);
+    s+=bufferSize;
   }
 
 
@@ -112,7 +132,13 @@ int main (int argc, char *argv[]){
   free(toPassString);
   sem_close(filePipeReadySemaphore);
   sem_unlink("filePipeReadySemaphore");
+  shmdt(shm);
 
+
+
+  // destroy the shared memory 
+  // shmctl(shmid,IPC_RMID,NULL); 
+   
   return 0;
 }
 
@@ -158,6 +184,7 @@ void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe
 
   close(filePipe[0]);
   close(hashPipe[1]);
+
   return;
 }
 
