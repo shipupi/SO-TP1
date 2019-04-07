@@ -73,8 +73,11 @@ int main (int argc, char *argv[]){
     {
       // fprintf(stderr, "i: %d. currentFilename: %d\n", i, currentFilename);
       hashFile(argv[0], fileNames[i], buf);
-      // Return to parent
-      write(1, buf,bufferSize);
+      if (buf[0] != 0)
+      {
+        // Return to parent
+        write(1, buf,bufferSize);
+      }
       // Cleanup
       // fprintf(stderr, "%d: %s\n", getpid(), buf);
       memset(buf,0,bufferSize);

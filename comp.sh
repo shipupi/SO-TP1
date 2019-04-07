@@ -3,7 +3,7 @@ echo "Starting compilation..."
 
 gcc -Wall  -g -c slave.c view.c hashfiles.c
 gcc -g  -Wall slave.o -lpthread -o slave.fl
-gcc -g  -Wall view.o -o view.fl
+gcc -g  -Wall view.o -lpthread -o view.fl
 gcc -g  -Wall hashfiles.o -lpthread -o hashfiles.fl
 printf "Compilation Done!\n\n"
 rm -f *.o

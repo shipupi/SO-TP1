@@ -21,26 +21,41 @@ static const int bufferSize = 512; // IMPORTANT: SHSIZE must be divisible by buf
 static const int fileNameSize = 512;
 
 int main (int argc, char *argv[]){
+
+  // Init View shared variables (and clean semaphores)
   printf("%d\n", getpid());  
   fflush(stdout);
-  sleep(5); // wait for view
+  sem_t *hashReadySemaphore = sem_open("hashReadySemaphore", O_CREAT, 0644, 0);
+  sem_t *shmReadySemaphore = sem_open("shmReadySemaphore", O_CREAT, 0644, 0);
+  int semval, i;
+
+  sem_getvalue(hashReadySemaphore, &semval);
+  for (i = 0; i < semval; ++i)
+  {
+    sem_wait(hashReadySemaphore);
+  }
+  sem_getvalue(shmReadySemaphore, &semval);
+  for (i = 0; i < semval; ++i)
+  {
+    sem_wait(shmReadySemaphore);
+  }
+
+  sleep(1); // wait for view
 
   // Init variables
   int numberOfSlaves = 2;
   int filesPerSlave = 1;
   pid_t slaveIds[numberOfSlaves];
   int totalFiles = argc - 1;
+  int currSon;
   int remainingFiles = totalFiles;
   int readyFiles = 0;
-
+  struct stat path_stat;
   int argIndex = 1;
-  int i, currSon;
   char *buf = calloc(bufferSize, bufferSize);
   char *toPassString = calloc(fileNameSize, fileNameSize);
   FILE * fp;
   fp = fopen ("./outputs/hashFilesOutput","w");
-
-
 
   // share memory set up
   key_t key = ftok("./hashfiles.fl",1337); 
@@ -65,6 +80,7 @@ int main (int argc, char *argv[]){
     exit(1);
   }
   memset(shm, 0, SHSIZE);
+  sem_post(shmReadySemaphore);
   
 
   // Init pipes
@@ -76,6 +92,7 @@ int main (int argc, char *argv[]){
   // Closing the semaphore to avoid previous non-closed semaphores conflicts
   sem_unlink("filePipeReadySemaphore");
   sem_t *filePipeReadySemaphore = sem_open("filePipeReadySemaphore", O_CREAT, 0644, 1);
+  
   // Create slaves
   createSlaves(argv[0], numberOfSlaves, hashPipe, filePipe, slaveIds);
 
@@ -90,9 +107,15 @@ int main (int argc, char *argv[]){
         if (remainingFiles > 0) {
           // fprintf(stderr, "remainingFiles: %d\n", remainingFiles);
 
-          strcpy(toPassString, argv[argIndex]);
-          write(filePipe[1], toPassString, fileNameSize);
-          memset(toPassString,'\0',fileNameSize);
+
+          stat(argv[argIndex], &path_stat);
+          if (S_ISDIR(path_stat.st_mode)) {
+            totalFiles--;
+          } else {
+            strcpy(toPassString, argv[argIndex]);
+            write(filePipe[1], toPassString, fileNameSize);
+            memset(toPassString,'\0',fileNameSize);
+          }   
           // Decrease remaining files and increase current arg
           remainingFiles--;
           argIndex++;
@@ -106,11 +129,18 @@ int main (int argc, char *argv[]){
     // Release all the remaining files one at a time per son
     while (remainingFiles > 0) {
       // Write the file
-      strcpy(toPassString, argv[argIndex]);
-      write(filePipe[1], toPassString, fileNameSize);
-      memset(toPassString,'\0',fileNameSize);
-      // Write a separator
-      write(filePipe[1], "\0", fileNameSize);
+      stat(argv[argIndex], &path_stat);
+      
+      if (S_ISDIR(path_stat.st_mode))
+      {
+        totalFiles--;
+      } else {
+        strcpy(toPassString, argv[argIndex]);
+        write(filePipe[1], toPassString, fileNameSize);
+        memset(toPassString,'\0',fileNameSize);
+        // Write a separator
+        write(filePipe[1], "\0", fileNameSize);
+      }
       remainingFiles--;
       argIndex++;
     }
@@ -133,6 +163,7 @@ int main (int argc, char *argv[]){
     if (shmOffset == SHSIZE) {
       shmOffset = 0;
     }
+    sem_post(hashReadySemaphore);
     readyFiles++;
   }
 
@@ -145,9 +176,10 @@ int main (int argc, char *argv[]){
   free(toPassString);
   sem_close(filePipeReadySemaphore);
   sem_unlink("filePipeReadySemaphore");
+  sem_close(shmReadySemaphore);
   shmdt(shm);
   fclose (fp);
-   
+  sem_close(hashReadySemaphore);
   return 0;
 }
 

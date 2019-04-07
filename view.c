@@ -8,12 +8,19 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sys/select.h>
+#include <semaphore.h>
+#include <sys/stat.h>        /* For mode constants */
+#include <fcntl.h>           /* For O_* constants */
+#include <sys/wait.h>
+#include <time.h>
 
 
 #define SHSIZE 30720
 #define BUFFERSIZE 512
 
 int main(int argc,char * argv[]){
+
+	// Check hashfile Process exists
 
 	// Bloque sacado de : https://stackoverflow.com/questions/51913506/how-to-add-a-timeout-when-reading-from-stdin
 	int LEN = 20;
@@ -33,6 +40,7 @@ int main(int argc,char * argv[]){
         fgets(cpid, LEN, stdin);
     }
     // End
+
     int hashfilesPID = atoi(cpid); 
     if (hashfilesPID <= 0)
     {
@@ -46,18 +54,23 @@ int main(int argc,char * argv[]){
     	exit(0);
     }
 
-
+    // Init variables
+    struct timespec tm;
+    
+    tm.tv_sec += 1;
+    int semval;
 	int shmid = -1;
 	key_t key = ftok("./hashfiles.fl",1337); 
 	char  * shm;
 	char * s;
-	int printing = 0;
 	int offset = 0;
+	char c;
+	int i;
+	sem_t *hashReadySemaphore = sem_open("hashReadySemaphore", O_CREAT, 0644, 0);
+	sem_t *shmReadySemaphore = sem_open("shmReadySemaphore", O_CREAT, 0644, 0);
 
-
-	while(shmid == -1) {
-		shmid = shmget(key,SHSIZE,0666);
-	}
+	sem_wait(shmReadySemaphore);
+	shmid = shmget(key,SHSIZE,0666);
 
 	if(shmid < 0){
 		perror("shmget");
@@ -70,28 +83,45 @@ int main(int argc,char * argv[]){
 		exit(1);
 	}
 	s = shm;
-	while(1) {
-		char c;
-		c = *(s + offset);
-		if (c != 0){
-			printing = 1;
+
+	while(kill(hashfilesPID, 0) >= 0) { // Hashfiles app is open, let's wait for the semaphore
+		clock_gettime(CLOCK_REALTIME, &tm);
+		tm.tv_sec += 1;
+		sem_timedwait(hashReadySemaphore, &tm); // Max timeout of 5 seconds, in case app is already dead to avoid deadlock
+		while((c = *(s + offset)) != 0) {
 			printf("%c",c);		
 			offset++;
-		} else {
-			if (printing == 1) {
-				printing = 0;
-				memset(s, 0, BUFFERSIZE);
-				s += BUFFERSIZE;
-				if ((s - shm) == SHSIZE) {
-					s = shm;
-				}
-				offset = 0;
-			} else if (kill(hashfilesPID, 0) < 0) {// Received 0 and parent process is closed. No more info is coming
-				break;	
-			}
 		}
+		memset(s, 0, BUFFERSIZE);
+		s += BUFFERSIZE;
+		if ((s - shm) == SHSIZE) {
+			s = shm;
+		}
+		offset = 0;
 	}
+	// Hashfiles app is closed
+	// Printing remaining files
+	sem_getvalue(hashReadySemaphore, &semval);
+	for (i = 0; i < semval; ++i)
+	{
+		while((c = *(s + offset)) != 0) {
+			printf("%c",c);		
+			offset++;
+		}
+		memset(s, 0, BUFFERSIZE);
+		s += BUFFERSIZE;
+		if ((s - shm) == SHSIZE) {
+			s = shm;
+		}
+		offset = 0;	
+	}
+
+	// cleanup
 	shmdt(shm);
 	shmctl(shmid,IPC_RMID,NULL); 
+	sem_close(hashReadySemaphore);
+	sem_unlink("hashReadySemaphore");
+	sem_close(shmReadySemaphore);
+	sem_unlink("shmReadySemaphore");
 	return 0;
 }
