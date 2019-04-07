@@ -21,8 +21,8 @@ int main (int argc, char *argv[]){
   
 
   // Init variables
-  int numberOfSlaves = 5;
-  int filesPerSlave = 3;
+  int numberOfSlaves = 3;
+  int filesPerSlave = 2;
   pid_t slaveIds[numberOfSlaves];
   int totalFiles = argc - 1;
   int remainingFiles = totalFiles;
@@ -30,8 +30,8 @@ int main (int argc, char *argv[]){
 
   int argIndex = 1;
   int i, currSon;
-  char *buf;
-  buf = calloc(bufferSize, bufferSize);
+  char *buf = calloc(bufferSize, bufferSize);
+  char *toPassString = calloc(fileNameSize, fileNameSize);
   // Init pipes
   int hashPipe[2], filePipe[2];
   pipe(hashPipe);
@@ -55,7 +55,6 @@ int main (int argc, char *argv[]){
   // Main Loop
   // printf("Remaining files: %d\n", remainingFiles);
   int son = 0;
-
   while(remainingFiles > 0) {
 
     // Write first wave of files ( N per Son)
@@ -65,7 +64,10 @@ int main (int argc, char *argv[]){
       {
         if (remainingFiles > 0) {
           // fprintf(stderr, "remainingFiles: %d\n", remainingFiles);
-          write(filePipe[1], argv[argIndex], fileNameSize);
+
+          strcpy(toPassString, argv[argIndex]);
+          write(filePipe[1], toPassString, fileNameSize);
+          memset(toPassString,'\0',fileNameSize);
           // Decrease remaining files and increase current arg
           fprintf(stderr, "Sent to son %d: %s\n", son, argv[argIndex]);
           remainingFiles--;
@@ -80,7 +82,9 @@ int main (int argc, char *argv[]){
     // Release all the remaining files one at a time per son
     while (remainingFiles > 0) {
       // Write the file
-      write(filePipe[1], argv[argIndex], fileNameSize);
+      strcpy(toPassString, argv[argIndex]);
+      write(filePipe[1], toPassString, fileNameSize);
+      memset(toPassString,'\0',fileNameSize);
       // Write a separator
       write(filePipe[1], "\0", fileNameSize);
       fprintf(stderr, "Sent to son %d: %s\n", son, argv[argIndex]);
@@ -105,6 +109,7 @@ int main (int argc, char *argv[]){
   close(hashPipe[0]);
   close(filePipe[1]);
   free(buf);
+  free(toPassString);
   sem_close(filePipeReadySemaphore);
   sem_unlink("filePipeReadySemaphore");
 
@@ -118,7 +123,8 @@ void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe
 // All slaves will read and write from the same pipes
 
   pid_t id;
-  for (int i = 0; i < numberOfSlaves; i++)
+  int i;
+  for (i = 0; i < numberOfSlaves; i++)
   {
     id = fork();
     if (id == -1) {

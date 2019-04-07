@@ -42,11 +42,11 @@ int main (int argc, char *argv[]){
   char *fileNames[100];
   int currentFilename = 0;
   int processedFiles = 0;
+  int i;
   while(1) {
     // Request file
     // Wait for pipe use
     sem_wait(filePipeReadySemaphore);
-    // printf("Slave Requesting File2\n");
 
     // Read ALL The files in the pipe (until a read is null?)
 
@@ -54,6 +54,7 @@ int main (int argc, char *argv[]){
       
       memset(fileName, 0, fileNameSize);
       read(STDIN_FILENO, fileName, fileNameSize);
+
       if (fileName[0] != '\0') {
         fileNames[currentFilename] = malloc(fileNameSize);
         strcpy(fileNames[currentFilename], fileName);
@@ -69,7 +70,7 @@ int main (int argc, char *argv[]){
 
     // Hash
     // fprintf(stderr, "processedFiles: %d, currentFilename: %d\n", processedFiles, currentFilename);
-    for (int i = processedFiles; i < currentFilename; ++i)
+    for (i = processedFiles; i < currentFilename; ++i)
     {
       // fprintf(stderr, "i: %d. currentFilename: %d\n", i, currentFilename);
       hashFile(argv[0], fileNames[i], buf);
