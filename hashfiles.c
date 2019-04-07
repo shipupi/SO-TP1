@@ -10,22 +10,24 @@
 #include <signal.h>
 #include <sys/shm.h>          /* For share memory*/
 
-#define SHSIZE 100
+#define SHSIZE 30720
 
 void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe[],pid_t slaveIds[]);
 void killChild(pid_t pid);
 void killChilds(pid_t pids[], int numberOfSlaves);
 
 
-static const int bufferSize = 512;
+static const int bufferSize = 512; // IMPORTANT: SHSIZE must be divisible by bufferSize
 static const int fileNameSize = 512;
 
 int main (int argc, char *argv[]){
-  
+  printf("%d\n", getpid());  
+  fflush(stdout);
+  sleep(5); // wait for view
 
   // Init variables
-  int numberOfSlaves = 1;
-  int filesPerSlave = 2;
+  int numberOfSlaves = 2;
+  int filesPerSlave = 1;
   pid_t slaveIds[numberOfSlaves];
   int totalFiles = argc - 1;
   int remainingFiles = totalFiles;
@@ -35,7 +37,9 @@ int main (int argc, char *argv[]){
   int i, currSon;
   char *buf = calloc(bufferSize, bufferSize);
   char *toPassString = calloc(fileNameSize, fileNameSize);
-  buf = calloc(bufferSize, bufferSize);
+  FILE * fp;
+  fp = fopen ("./outputs/hashFilesOutput","w");
+
 
 
   // share memory set up
@@ -46,22 +50,23 @@ int main (int argc, char *argv[]){
   }
   int shmid;
   char  * shm;
-  char * s;
+  int shmOffset = 0;
   
-
-  shmid = shmget(key,SHSIZE,IPC_EXCL | IPC_CREAT);
+  shmid = shmget(key,SHSIZE,IPC_CREAT | 0666);
   if(shmid < 0){
     perror("shmget");
     exit(1);
   }
 
   shm = shmat(shmid,NULL,0);
-  memset(shm, 0, SHSIZE);
+
   if(shm == (char *)-1){
     perror("shmat");
     exit(1);
   }
+  memset(shm, 0, SHSIZE);
   
+
   // Init pipes
   int hashPipe[2], filePipe[2];
   pipe(hashPipe);
@@ -113,14 +118,22 @@ int main (int argc, char *argv[]){
 
 
   // All files are sent, now wait for files to complete
-  sleep(5); // wait for view
-  fprintf(stderr, "%s\n", "now...");
+  
   while(readyFiles < totalFiles) {
+    // Read from pipe
     read(hashPipe[0], buf, bufferSize);
+
+    // Print to outputs
+    fprintf (fp, "%s", buf);
+    memcpy(shm + shmOffset,buf,bufferSize);
+    // fprintf(stderr, "(padre)%s",buf);
+
+    // Pointer change
+    shmOffset+=bufferSize;
+    if (shmOffset == SHSIZE) {
+      shmOffset = 0;
+    }
     readyFiles++;
-    fprintf(stderr, "(padre)%s",buf);
-    memcpy(s,buf,bufferSize);
-    s+=bufferSize;
   }
 
 
@@ -133,11 +146,7 @@ int main (int argc, char *argv[]){
   sem_close(filePipeReadySemaphore);
   sem_unlink("filePipeReadySemaphore");
   shmdt(shm);
-
-
-
-  // destroy the shared memory 
-  // shmctl(shmid,IPC_RMID,NULL); 
+  fclose (fp);
    
   return 0;
 }

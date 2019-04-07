@@ -8,65 +8,43 @@ gcc -g  -Wall hashfiles.o -lpthread -o hashfiles.fl
 printf "Compilation Done!\n\n"
 rm -f *.o
 
+
 if [[ $* == *--dev* ]]; then
 	echo "-------------------------------------------------------"
 	printf "RUNNING CPPCHECK\n\n"
 	# DEV COMANDS
-	cppcheck --enable=all --force --inconclusive --quiet slave.c
+	cppcheck --enable=all --suppress=missingIncludeSystem --force --inconclusive --quiet slave.c
 	read -p "Press any key to continue... "
-	cppcheck --enable=all --force --inconclusive --quiet view.c
+	cppcheck --enable=all --suppress=missingIncludeSystem --force --inconclusive --quiet view.c
 	read -p "Press any key to continue... "
-	cppcheck --enable=all --force --inconclusive --quiet hashfiles.c
+	cppcheck --enable=all --suppress=missingIncludeSystem --force --inconclusive --quiet hashfiles.c
 	read -p "Press any key to continue... "
 	echo "-------------------------------------------------------"
 
-	# printf "RUNNING Valgrind\n\n"
-	# printf "Checking Valgrind for slave\n"
-	# echo -n "slave.fl" | valgrind --track-origins=yes ./slave.fl
-
-	# read -p "Press any key to continue... "
-
-	# NUMBER=$((1 + RANDOM % 255))
-	# echo $NUMBER > test/$NUMBER
-
-	# echo "-------------------------------------------------------"
-	# echo "CHECKING SLAVE FILE"
-	# # Hash with MD5
-	# printf "Hashing random number with md5sum\n"
-	# MD5CHECK=$(md5sum test/$NUMBER)
-	# echo $MD5CHECK > test/md5check
-	# echo $MD5CHECK
-	# printf "\n"
-	# # Hash with Slave
-	# printf "Hashing random number with Slave file\n"
-	# SLAVECHECK=$(echo -n "test/$NUMBER" | ./slave.fl)
-	# echo $SLAVECHECK > test/slavecheck
-	# echo $SLAVECHECK
-	# printf "\n"
-
-	# # Diff between hashes
-	# printf "Checking for differences between files..\n"
-	# DIFF=$(diff test/slavecheck test/md5check)
-	# echo $DIFF
-	# if [ "$DIFF" != "" ] 
-	# then
-	# 	echo "[ERROR] ERROR IN SLAVE"
-	# else 
-	#     echo "[OK] The results are the same "
-	# fi
-
-	# # Cleanup
-	# rm test/$NUMBER
-	# rm test/slavecheck
-	# rm test/md5check
+	printf "RUNNING Valgrind\n\n"
+	valgrind --leak-check=full --show-leak-kinds=all ./hashfiles.fl * | ./view.fl
 	printf "\n"
 
 
-
+elif [[ $* == *--test* ]]; then
+	rm outputs/* > /dev/null
+	./hashfiles.fl * > /dev/null
+	sort outputs/hashFilesOutput > outputs/sortedOutput1
+	md5sum * > outputs/md5output
+	sort outputs/md5output > outputs/sortedOutput2
+	printf "Showing differences: \n"
+	DIFF=$(diff outputs/sortedOutput1 outputs/sortedOutput2)
+	if [ "$DIFF" == "" ] 
+	then
+		echo "[TEST SUCCESSFUL] No differences were found! :-)"
+	else 
+		echo $DIFF
+	fi
+	rm outputs/* > /dev/null
 else 
 
 	# Regular Commands
-	printf "Running program \n\n"
-	./hashfiles.fl *
+	# printf "Running program \n\n"
+	./hashfiles.fl * | ./view.fl 
 fi
 

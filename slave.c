@@ -106,11 +106,11 @@ int hashFile(char *myPath, char *pathToFile, char *buffer) {
 
 // HIJO
 
-// Redirect stdOut to pipe and stdErr to pipe
+// Redirect stdOut to pipe
     close(1);
-    close(2);
+    // close(2);
     dup(p[1]);
-    dup(p[1]);
+    // dup(p[1]);
 
     close(p[0]);
     close(p[1]);
