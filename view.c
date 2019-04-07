@@ -59,7 +59,7 @@ int main(int argc,char * argv[]){
     
     tm.tv_sec += 1;
     int semval;
-	int shmid = -1;
+	int shmid;
 	key_t key = ftok("./hashfiles.fl",1337); 
 	char  * shm;
 	char * s;

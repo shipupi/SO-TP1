@@ -1,3 +1,4 @@
 *.o
 *.fl
 test
+outputs/*
