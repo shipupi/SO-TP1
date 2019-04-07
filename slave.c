@@ -24,7 +24,6 @@ Pipes in slave:
 0 FILEPIPE    R ( Receives file names to hash )
 1 HASHPIPE    W ( Sends hash values back to parent)
 2 STDERR      W ( For debug )
-3 REQUESTPIPE W ( Signal that child is ready to hash)
 
 */
 

@@ -15,7 +15,9 @@
 void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe[],pid_t slaveIds[]);
 void killChild(pid_t pid);
 void killChilds(pid_t pids[], int numberOfSlaves);
-
+char *  initSharedMemory(sem_t * shmReadySemaphore);
+int sendFilesToSlaves(int totalFiles, int numberOfSlaves, int filesPerSlave, char *argv[], int filePipe[]);
+void sendHashesToOutputs(int totalFiles, int hashPipe[], char * shm , sem_t *hashReadySemaphore);
 
 static const int bufferSize = 512; // IMPORTANT: SHSIZE must be divisible by bufferSize
 static const int fileNameSize = 512;
@@ -24,21 +26,11 @@ int main (int argc, char *argv[]){
 
   // Init View shared variables (and clean semaphores)
   printf("%d\n", getpid());  
-  fflush(stdout);
+  fflush(stdout); // Must flush instantly to let view process know the PID
+
+  // Init semaphores (Also empty semahphores to avoid previous crashes conflicts)
   sem_t *hashReadySemaphore = sem_open("hashReadySemaphore", O_CREAT, 0644, 0);
   sem_t *shmReadySemaphore = sem_open("shmReadySemaphore", O_CREAT, 0644, 0);
-  int semval, i;
-
-  sem_getvalue(hashReadySemaphore, &semval);
-  for (i = 0; i < semval; ++i)
-  {
-    sem_wait(hashReadySemaphore);
-  }
-  sem_getvalue(shmReadySemaphore, &semval);
-  for (i = 0; i < semval; ++i)
-  {
-    sem_wait(shmReadySemaphore);
-  }
 
   sleep(1); // wait for view
 
@@ -47,41 +39,9 @@ int main (int argc, char *argv[]){
   int filesPerSlave = 1;
   pid_t slaveIds[numberOfSlaves];
   int totalFiles = argc - 1;
-  int currSon;
-  int remainingFiles = totalFiles;
-  int readyFiles = 0;
-  struct stat path_stat;
-  int argIndex = 1;
-  char *buf = calloc(bufferSize, bufferSize);
-  char *toPassString = calloc(fileNameSize, fileNameSize);
-  FILE * fp;
-  fp = fopen ("./outputs/hashFilesOutput","w");
-
-  // share memory set up
-  key_t key = ftok("./hashfiles.fl",1337); 
-  if(key == -1){
-    perror("ftok");
-    exit(1);
-  }
-  int shmid;
-  char  * shm;
-  int shmOffset = 0;
   
-  shmid = shmget(key,SHSIZE,IPC_CREAT | 0666);
-  if(shmid < 0){
-    perror("shmget");
-    exit(1);
-  }
+  char * shm = initSharedMemory(shmReadySemaphore);
 
-  shm = shmat(shmid,NULL,0);
-
-  if(shm == (char *)-1){
-    perror("shmat");
-    exit(1);
-  }
-  memset(shm, 0, SHSIZE);
-  sem_post(shmReadySemaphore);
-  
 
   // Init pipes
   int hashPipe[2], filePipe[2];
@@ -96,90 +56,21 @@ int main (int argc, char *argv[]){
   // Create slaves
   createSlaves(argv[0], numberOfSlaves, hashPipe, filePipe, slaveIds);
 
-  // Sending initial load
-  while(remainingFiles > 0) {
+  // Send Files to Slaves
+  totalFiles = sendFilesToSlaves(totalFiles, numberOfSlaves, filesPerSlave, argv, filePipe);
 
-    // Write first wave of files ( N per Son)
-    for (currSon = 0; currSon < numberOfSlaves; ++currSon)
-    {
-      for (i = 0; i < filesPerSlave; ++i)
-      {
-        if (remainingFiles > 0) {
-          // fprintf(stderr, "remainingFiles: %d\n", remainingFiles);
-
-
-          stat(argv[argIndex], &path_stat);
-          if (S_ISDIR(path_stat.st_mode)) {
-            totalFiles--;
-          } else {
-            strcpy(toPassString, argv[argIndex]);
-            write(filePipe[1], toPassString, fileNameSize);
-            memset(toPassString,'\0',fileNameSize);
-          }   
-          // Decrease remaining files and increase current arg
-          remainingFiles--;
-          argIndex++;
-
-        }
-      }
-      // Write a separator
-      write(filePipe[1], "\0", fileNameSize);
-    }
-
-    // Release all the remaining files one at a time per son
-    while (remainingFiles > 0) {
-      // Write the file
-      stat(argv[argIndex], &path_stat);
-      
-      if (S_ISDIR(path_stat.st_mode))
-      {
-        totalFiles--;
-      } else {
-        strcpy(toPassString, argv[argIndex]);
-        write(filePipe[1], toPassString, fileNameSize);
-        memset(toPassString,'\0',fileNameSize);
-        // Write a separator
-        write(filePipe[1], "\0", fileNameSize);
-      }
-      remainingFiles--;
-      argIndex++;
-    }
-  }
-
-
-  // All files are sent, now wait for files to complete
-  
-  while(readyFiles < totalFiles) {
-    // Read from pipe
-    read(hashPipe[0], buf, bufferSize);
-
-    // Print to outputs
-    fprintf (fp, "%s", buf);
-    memcpy(shm + shmOffset,buf,bufferSize);
-    // fprintf(stderr, "(padre)%s",buf);
-
-    // Pointer change
-    shmOffset+=bufferSize;
-    if (shmOffset == SHSIZE) {
-      shmOffset = 0;
-    }
-    sem_post(hashReadySemaphore);
-    readyFiles++;
-  }
-
+  // Send Hashes to Outputs
+  sendHashesToOutputs(totalFiles, hashPipe, shm, hashReadySemaphore);
 
   // Cleanup
   killChilds(slaveIds, numberOfSlaves);
   close(hashPipe[0]);
   close(filePipe[1]);
-  free(buf);
-  free(toPassString);
   sem_close(filePipeReadySemaphore);
   sem_unlink("filePipeReadySemaphore");
   sem_close(shmReadySemaphore);
   shmdt(shm);
-  fclose (fp);
-  sem_close(hashReadySemaphore);
+   sem_close(hashReadySemaphore);
   return 0;
 }
 
@@ -198,8 +89,6 @@ void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe
       perror("Error en fork");
       exit(EXIT_FAILURE);
     } else if (id == 0) {
-
-
 
       // redirect filePipe to stdIn
       close(0);
@@ -240,4 +129,121 @@ void killChilds(pid_t pids[], int numberOfSlaves) {
   {
     killChild(pids[i]);
   }
+}
+
+char * initSharedMemory(sem_t * shmReadySemaphore) {
+  // share memory set up
+  key_t key = ftok("./hashfiles.fl",1337); 
+  if(key == -1){
+    perror("ftok");
+    exit(1);
+  }
+  int shmid;
+  
+  shmid = shmget(key,SHSIZE,IPC_CREAT | 0666);
+  if(shmid < 0){
+    perror("shmget");
+    exit(1);
+  }
+
+  char * shm = shmat(shmid,NULL,0);
+
+  if(shm == (char *)-1){
+    perror("shmat");
+    exit(1);
+  }
+  memset(shm, 0, SHSIZE);
+  sem_post(shmReadySemaphore);
+  return shm;
+}
+
+int sendFilesToSlaves(int totalFiles, int numberOfSlaves, int filesPerSlave, char *argv[], int filePipe[]) {
+  
+  int currSon = 0;
+  int argIndex = 1;
+  struct stat path_stat;
+  int i;
+  int remainingFiles = totalFiles;
+  char *toPassString = calloc(fileNameSize, fileNameSize);
+  // Sending files
+  while(remainingFiles > 0) {
+
+    // Write first wave of files ( N per Son)
+    for (currSon = 0; currSon < numberOfSlaves; ++currSon) {
+      for (i = 0; i < filesPerSlave; ++i) {
+        if (remainingFiles > 0) {
+          // fprintf(stderr, "remainingFiles: %d\n", remainingFiles);
+
+
+          stat(argv[argIndex], &path_stat);
+          if (S_ISDIR(path_stat.st_mode)) {
+            totalFiles--;
+          } else {
+            strcpy(toPassString, argv[argIndex]);
+            write(filePipe[1], toPassString, fileNameSize);
+            memset(toPassString,'\0',fileNameSize);
+          }   
+          // Decrease remaining files and increase current arg
+          remainingFiles--;
+          argIndex++;
+
+        }
+      }
+      // Write a separator
+      write(filePipe[1], "\0", fileNameSize);
+    }
+
+    // Release all the remaining files one at a time per son
+    while (remainingFiles > 0) {
+      // Write the file
+      stat(argv[argIndex], &path_stat);
+      
+      if (S_ISDIR(path_stat.st_mode))
+      {
+        totalFiles--;
+      } else {
+        strcpy(toPassString, argv[argIndex]);
+        write(filePipe[1], toPassString, fileNameSize);
+        memset(toPassString,'\0',fileNameSize);
+        // Write a separator
+        write(filePipe[1], "\0", fileNameSize);
+      }
+      remainingFiles--;
+      argIndex++;
+    }
+
+  }
+
+  free(toPassString);
+  return totalFiles;
+
+}
+
+
+void sendHashesToOutputs(int totalFiles, int hashPipe[], char * shm , sem_t *hashReadySemaphore) {
+  int shmOffset = 0;
+  int readyFiles = 0;
+  char *buf = calloc(bufferSize, bufferSize);
+  FILE * fp;
+  fp = fopen ("./outputs/hashFilesOutput","w");
+  // All files are sent, now wait for files to complete
+  while(readyFiles < totalFiles) {
+    // Read from pipe
+    read(hashPipe[0], buf, bufferSize);
+
+    // Print to outputs
+    fprintf (fp, "%s", buf);
+    memcpy(shm + shmOffset,buf,bufferSize);
+    // fprintf(stderr, "(padre)%s",buf);
+
+    // Pointer change
+    shmOffset+=bufferSize;
+    if (shmOffset == SHSIZE) {
+      shmOffset = 0;
+    }
+    sem_post(hashReadySemaphore);
+    readyFiles++;
+  }
+  fclose (fp);
+  free(buf);
 }

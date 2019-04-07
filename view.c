@@ -18,46 +18,14 @@
 #define SHSIZE 30720
 #define BUFFERSIZE 512
 
+int waitForPid();
 int main(int argc,char * argv[]){
 
-	// Check hashfile Process exists
-
-	// Bloque sacado de : https://stackoverflow.com/questions/51913506/how-to-add-a-timeout-when-reading-from-stdin
-	int LEN = 20;
-	char cpid[LEN];
-	struct timeval timeout = {3, 0};
-    fd_set fds;
-    FD_ZERO(&fds);
-    FD_SET(STDIN_FILENO, &fds);
-    int ret = select(1, &fds, NULL, NULL, &timeout);
-    if (ret == -1) {
-        printf("Oops! Something wrong happened...\n");
-        exit(0);
-    } else if (ret == 0) {
-        printf("No pid was received, exiting.\n");
-        exit(0);
-    } else {
-        fgets(cpid, LEN, stdin);
-    }
-    // End
-
-    int hashfilesPID = atoi(cpid); 
-    if (hashfilesPID <= 0)
-    {
-    	printf("Invalid pid input. Exiting\n");
-    	exit(0);
-    }
-
-    if (kill(hashfilesPID, 0) < 0)
-    {
-    	printf("Hashfiles process doesn't exist. Exiting\n");
-    	exit(0);
-    }
-
+	// Check hashfile Process exist
+	int hashfilesPID = waitForPid();
+ 
     // Init variables
     struct timespec tm;
-    
-    tm.tv_sec += 1;
     int semval;
 	int shmid;
 	key_t key = ftok("./hashfiles.fl",1337); 
@@ -66,6 +34,8 @@ int main(int argc,char * argv[]){
 	int offset = 0;
 	char c;
 	int i;
+
+	// Init semaphores
 	sem_t *hashReadySemaphore = sem_open("hashReadySemaphore", O_CREAT, 0644, 0);
 	sem_t *shmReadySemaphore = sem_open("shmReadySemaphore", O_CREAT, 0644, 0);
 
@@ -92,15 +62,17 @@ int main(int argc,char * argv[]){
 			printf("%c",c);		
 			offset++;
 		}
-		memset(s, 0, BUFFERSIZE);
-		s += BUFFERSIZE;
-		if ((s - shm) == SHSIZE) {
+		memset(s, 0, BUFFERSIZE); // Clean the shared memory after using it ( In case it may be reused when SH is full)
+		s += BUFFERSIZE; // Pass to the next block
+		if ((s - shm) == SHSIZE) { // Reset to the first Block if all SHM is used
 			s = shm;
 		}
 		offset = 0;
 	}
+
+
 	// Hashfiles app is closed
-	// Printing remaining files
+	// Printing remaining files 
 	sem_getvalue(hashReadySemaphore, &semval);
 	for (i = 0; i < semval; ++i)
 	{
@@ -124,4 +96,37 @@ int main(int argc,char * argv[]){
 	sem_close(shmReadySemaphore);
 	sem_unlink("shmReadySemaphore");
 	return 0;
+}
+
+// Parte de este bloque sacado de : https://stackoverflow.com/questions/51913506/how-to-add-a-timeout-when-reading-from-stdin
+int waitForPid() {
+	int LEN = 20;
+	char cpid[LEN];
+	struct timeval timeout = {10, 0}; // Timeout of 10 seconds to receive a pid
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(STDIN_FILENO, &fds);
+    int ret = select(1, &fds, NULL, NULL, &timeout);
+    if (ret == -1) {
+        printf("Oops! Something wrong happened...\n");
+        exit(0);
+    } else if (ret == 0) {
+        printf("No pid was received, exiting.\n");
+        exit(0);
+    } else {
+        fgets(cpid, LEN, stdin);
+    }
+    int hashfilesPID = atoi(cpid); 
+    if (hashfilesPID <= 0)
+    {
+    	printf("Invalid pid input. Exiting\n");
+    	exit(0);
+    }
+
+    if (kill(hashfilesPID, 0) < 0)
+    {
+    	printf("Hashfiles process doesn't exist. Exiting\n");
+    	exit(0);
+    }
+    return hashfilesPID;
 }
