@@ -20,7 +20,7 @@ int sendFilesToSlaves(int totalFiles, int numberOfSlaves, int filesPerSlave, cha
 void sendHashesToOutputs(int totalFiles, int hashPipe[], char * shm , sem_t *hashReadySemaphore);
 
 static const int bufferSize = 512; // IMPORTANT: SHSIZE must be divisible by bufferSize
-static const int fileNameSize = 512;
+static const int fileNameSize = 513;
 
 int main (int argc, char *argv[]){
 
