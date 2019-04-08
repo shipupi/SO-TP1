@@ -28,7 +28,7 @@ int main (int argc, char *argv[]){
   printf("%d\n", getpid());  
   fflush(stdout); // Must flush instantly to let view process know the PID
 
-  // Init semaphores (Also empty semahphores to avoid previous crashes conflicts)
+  // Init semaphores (Also empty semahphores to avoid previous crashes conflicts?)
   sem_t *hashReadySemaphore = sem_open("hashReadySemaphore", O_CREAT, 0644, 0);
   sem_t *shmReadySemaphore = sem_open("shmReadySemaphore", O_CREAT, 0644, 0);
 
@@ -225,6 +225,12 @@ void sendHashesToOutputs(int totalFiles, int hashPipe[], char * shm , sem_t *has
   int readyFiles = 0;
   char *buf = calloc(bufferSize, bufferSize);
   FILE * fp;
+  struct stat st = {0};
+
+  if (stat("./outputs", &st) == -1) {
+      mkdir("./outputs", 0700);
+  }
+
   fp = fopen ("./outputs/hashFilesOutput","w");
   // All files are sent, now wait for files to complete
   while(readyFiles < totalFiles) {
