@@ -7,11 +7,10 @@
 #include <sys/stat.h>        /* For mode constants */
 #include <semaphore.h>
 #include <string.h>
-
+#include "hashfiles.h"
 
 static const char md5Path[] = "/usr/bin/md5sum";
-static const int bufferSize = 512;
-static const int fileNameSize = 512;
+
 
 
 int hashFile(char *myPath, char *pathToFile, char *buffer);
@@ -35,9 +34,9 @@ int main (int argc, char *argv[]){
 
 // Variable definitions
   char *buf;
-  buf = calloc(bufferSize, bufferSize);
+  buf = calloc(BUFFERSIZE, BUFFERSIZE);
   char *fileName;
-  fileName = calloc(fileNameSize,fileNameSize);
+  fileName = calloc(FILENAMESIZE,FILENAMESIZE);
   char *fileNames[100];
   int currentFilename = 0;
   int processedFiles = 0;
@@ -51,11 +50,11 @@ int main (int argc, char *argv[]){
 
     do {
       
-      memset(fileName, 0, fileNameSize);
-      read(STDIN_FILENO, fileName, fileNameSize);
+      memset(fileName, 0, FILENAMESIZE);
+      read(STDIN_FILENO, fileName, FILENAMESIZE);
 
       if (fileName[0] != '\0') {
-        fileNames[currentFilename] = malloc(fileNameSize);
+        fileNames[currentFilename] = malloc(FILENAMESIZE);
         strcpy(fileNames[currentFilename], fileName);
         currentFilename++;
       } else {
@@ -75,11 +74,11 @@ int main (int argc, char *argv[]){
       if (buf[0] != 0)
       {
         // Return to parent
-        write(1, buf,bufferSize);
+        write(1, buf,BUFFERSIZE);
       }
       // Cleanup
       // fprintf(stderr, "%d: %s\n", getpid(), buf);
-      memset(buf,0,bufferSize);
+      memset(buf,0,BUFFERSIZE);
       processedFiles++;
       free(fileNames[i]);
     }
@@ -131,8 +130,10 @@ int hashFile(char *myPath, char *pathToFile, char *buffer) {
 
   close(p[1]);
   wait(&status);
-  read(p[0], buffer, bufferSize);
+  read(p[0], buffer, BUFFERSIZE);//Read the result from md5hash and save it in buffer
   close(p[0]);
 
   return 0;
 }
+
+

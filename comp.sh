@@ -2,9 +2,9 @@
 echo "Starting compilation..."
 
 gcc -Wall  -g -c slave.c view.c hashfiles.c
-gcc -g  -Wall slave.o -lpthread -o slave.fl
-gcc -g  -Wall view.o -lpthread -o view.fl
-gcc -g  -Wall hashfiles.o -lpthread -o hashfiles.fl
+gcc -g  -Wall hashfiles.h slave.o -lpthread -o slave.fl
+gcc -g  -Wall hashfiles.h view.o -lpthread -o view.fl
+gcc -g  -Wall hashfiles.h hashfiles.o -lpthread -o hashfiles.fl
 printf "Compilation Done!\n\n"
 rm -f *.o
 
@@ -32,7 +32,7 @@ elif [[ $* == *--test* ]]; then
 
 	# Generate random files
 	mkdir test
-	for i in {1..10}
+	for i in {1..100}
 	do
 		echo $RANDOM > test/$RANDOM$i
 	done
