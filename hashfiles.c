@@ -9,8 +9,9 @@
 #include <semaphore.h>
 #include <signal.h>
 #include <sys/shm.h>          /* For share memory*/
+#include "hashfiles.h"
 
-#define SHSIZE 30720
+
 
 void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe[],pid_t slaveIds[]);
 void killChild(pid_t pid);
@@ -19,8 +20,6 @@ char *  initSharedMemory(sem_t * shmReadySemaphore);
 int sendFilesToSlaves(int totalFiles, int numberOfSlaves, int filesPerSlave, char *argv[], int filePipe[]);
 void sendHashesToOutputs(int totalFiles, int hashPipe[], char * shm , sem_t *hashReadySemaphore);
 
-static const int bufferSize = 512; // IMPORTANT: SHSIZE must be divisible by bufferSize
-static const int fileNameSize = 512;
 
 int main (int argc, char *argv[]){
 
@@ -164,7 +163,7 @@ int sendFilesToSlaves(int totalFiles, int numberOfSlaves, int filesPerSlave, cha
   struct stat path_stat;
   int i;
   int remainingFiles = totalFiles;
-  char *toPassString = calloc(fileNameSize, fileNameSize);
+  char *toPassString = calloc(FILENAMESIZE, FILENAMESIZE);
   // Sending files
   while(remainingFiles > 0) {
 
@@ -180,8 +179,8 @@ int sendFilesToSlaves(int totalFiles, int numberOfSlaves, int filesPerSlave, cha
             totalFiles--;
           } else {
             strcpy(toPassString, argv[argIndex]);
-            write(filePipe[1], toPassString, fileNameSize);
-            memset(toPassString,'\0',fileNameSize);
+            write(filePipe[1], toPassString, FILENAMESIZE);
+            memset(toPassString,'\0',FILENAMESIZE);
           }   
           // Decrease remaining files and increase current arg
           remainingFiles--;
@@ -190,7 +189,7 @@ int sendFilesToSlaves(int totalFiles, int numberOfSlaves, int filesPerSlave, cha
         }
       }
       // Write a separator
-      write(filePipe[1], "\0", fileNameSize);
+      write(filePipe[1], "\0", FILENAMESIZE);
     }
 
     // Release all the remaining files one at a time per son
@@ -203,10 +202,10 @@ int sendFilesToSlaves(int totalFiles, int numberOfSlaves, int filesPerSlave, cha
         totalFiles--;
       } else {
         strcpy(toPassString, argv[argIndex]);
-        write(filePipe[1], toPassString, fileNameSize);
-        memset(toPassString,'\0',fileNameSize);
+        write(filePipe[1], toPassString, FILENAMESIZE);
+        memset(toPassString,'\0',FILENAMESIZE);
         // Write a separator
-        write(filePipe[1], "\0", fileNameSize);
+        write(filePipe[1], "\0", FILENAMESIZE);
       }
       remainingFiles--;
       argIndex++;
@@ -223,7 +222,7 @@ int sendFilesToSlaves(int totalFiles, int numberOfSlaves, int filesPerSlave, cha
 void sendHashesToOutputs(int totalFiles, int hashPipe[], char * shm , sem_t *hashReadySemaphore) {
   int shmOffset = 0;
   int readyFiles = 0;
-  char *buf = calloc(bufferSize, bufferSize);
+  char *buf = calloc(BUFFERSIZE, BUFFERSIZE);
   FILE * fp;
   struct stat st = {0};
 
@@ -235,15 +234,15 @@ void sendHashesToOutputs(int totalFiles, int hashPipe[], char * shm , sem_t *has
   // All files are sent, now wait for files to complete
   while(readyFiles < totalFiles) {
     // Read from pipe
-    read(hashPipe[0], buf, bufferSize);
+    read(hashPipe[0], buf, BUFFERSIZE);
 
     // Print to outputs
     fprintf (fp, "%s", buf);
-    memcpy(shm + shmOffset,buf,bufferSize);
+    memcpy(shm + shmOffset,buf,BUFFERSIZE);
     // fprintf(stderr, "(padre)%s",buf);
 
     // Pointer change
-    shmOffset+=bufferSize;
+    shmOffset+=BUFFERSIZE;
     if (shmOffset == SHSIZE) {
       shmOffset = 0;
     }

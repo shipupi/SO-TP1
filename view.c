@@ -13,10 +13,10 @@
 #include <fcntl.h>           /* For O_* constants */
 #include <sys/wait.h>
 #include <time.h>
+#include "hashfiles.h"
 
 
-#define SHSIZE 30720
-#define BUFFERSIZE 512
+
 
 int waitForPid();
 int main(int argc,char * argv[]){
@@ -130,3 +130,5 @@ int waitForPid() {
     }
     return hashfilesPID;
 }
+
+
