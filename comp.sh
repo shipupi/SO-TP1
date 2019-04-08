@@ -27,11 +27,24 @@ if [[ $* == *--dev* ]]; then
 
 
 elif [[ $* == *--test* ]]; then
-	rm outputs/* > /dev/null
-	./hashfiles.fl * > /dev/null
+	rm outputs/* > /dev/null 2>/dev/null	
+
+
+	# Generate random files
+	mkdir test
+	for i in {1..10}
+	do
+		echo $RANDOM > test/$RANDOM$i
+	done
+
+	./hashfiles.fl test/* > /dev/null
 	sort outputs/hashFilesOutput > outputs/sortedOutput1
-	md5sum * > outputs/md5output
+	md5sum test/* > outputs/md5output
 	sort outputs/md5output > outputs/sortedOutput2
+	printf "Showing results for hashfiles: \n"
+	cat outputs/sortedOutput1
+	printf "Showing results for md5sum: \n"
+	cat outputs/sortedOutput2
 	printf "Showing differences: \n"
 	DIFF=$(diff outputs/sortedOutput1 outputs/sortedOutput2)
 	if [ "$DIFF" == "" ] 
@@ -40,6 +53,7 @@ elif [[ $* == *--test* ]]; then
 	else 
 		echo $DIFF
 	fi
+	rm test -R
 	rm outputs/* > /dev/null
 else 
 
