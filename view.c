@@ -38,7 +38,6 @@ int main(int argc,char * argv[]){
 	// Init semaphores
 	sem_t *hashReadySemaphore = sem_open(HASHREADYSEM, O_CREAT, 0644, 0);
 	sem_t *shmReadySemaphore = sem_open(SHMREADYSEM, O_CREAT, 0644, 0);
-
 	sem_wait(shmReadySemaphore);
 	shmid = shmget(key,SHSIZE,0666);
 
@@ -90,7 +89,6 @@ int main(int argc,char * argv[]){
 
 	// cleanup
 	shmdt(shm);
-	shmctl(shmid,IPC_RMID,NULL); 
 	sem_close(hashReadySemaphore);
 	sem_unlink(HASHREADYSEM);
 	sem_close(shmReadySemaphore);

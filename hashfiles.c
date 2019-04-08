@@ -16,19 +16,25 @@
 void createSlaves(char *myPath, int numberOfSlaves, int hashPipe[], int filePipe[],pid_t slaveIds[]);
 void killChild(pid_t pid);
 void killChilds(pid_t pids[], int numberOfSlaves);
-char *  initSharedMemory(sem_t * shmReadySemaphore);
+char *  initSharedMemory(sem_t * shmReadySemaphore, int *shmid);
 int sendFilesToSlaves(int totalFiles, int numberOfSlaves, int filesPerSlave, char *argv[], int filePipe[]);
 void sendHashesToOutputs(int totalFiles, int hashPipe[], char * shm , sem_t *hashReadySemaphore);
+void setSemaphoreValue(sem_t *sem, int value);
+
+
 
 int main (int argc, char *argv[]){
+  
+  // Init semaphores (Also empty semahphores to avoid previous crashes conflicts?)
+  sem_t *hashReadySemaphore = sem_open(HASHREADYSEM, O_CREAT, 0644, 0);
+  setSemaphoreValue(hashReadySemaphore, 0);
+  sem_t *shmReadySemaphore = sem_open(SHMREADYSEM, O_CREAT, 0644, 0);
+  setSemaphoreValue(shmReadySemaphore, 0);
 
   // Init View shared variables (and clean semaphores)
   printf("%d\n", getpid());  
   fflush(stdout); // Must flush instantly to let view process know the PID
 
-  // Init semaphores (Also empty semahphores to avoid previous crashes conflicts?)
-  sem_t *hashReadySemaphore = sem_open(HASHREADYSEM, O_CREAT, 0644, 0);
-  sem_t *shmReadySemaphore = sem_open(SHMREADYSEM, O_CREAT, 0644, 0);
 
   sleep(1); // wait for view
 
@@ -37,8 +43,9 @@ int main (int argc, char *argv[]){
   int filesPerSlave = 1;
   pid_t slaveIds[numberOfSlaves];
   int totalFiles = argc - 1;
-  
-  char * shm = initSharedMemory(shmReadySemaphore);
+  int *shmid = malloc(8);  
+
+  char * shm = initSharedMemory(shmReadySemaphore, shmid);
 
 
   // Init pipes
@@ -67,8 +74,12 @@ int main (int argc, char *argv[]){
   sem_close(filePipeReadySemaphore);
   sem_unlink(FILEPIPEREADYSEM);
   sem_close(shmReadySemaphore);
-  shmdt(shm);
   sem_close(hashReadySemaphore);
+
+  // Wait for view to close to delete the sared memory
+  shmdt(shm);
+  shmctl(*shmid,IPC_RMID,NULL); 
+  free(shmid);
   return 0;
 }
 
@@ -129,22 +140,21 @@ void killChilds(pid_t pids[], int numberOfSlaves) {
   }
 }
 
-char * initSharedMemory(sem_t * shmReadySemaphore) {
+char * initSharedMemory(sem_t * shmReadySemaphore, int *shmid) {
   // share memory set up
-  key_t key = ftok(SHMKEYSTR,SHMKEYNUM); 
+  key_t key = ftok("./hashfiles.fl",1337); 
   if(key == -1){
     perror("ftok");
     exit(1);
   }
-  int shmid;
   
-  shmid = shmget(key,SHSIZE,IPC_CREAT | 0666);
-  if(shmid < 0){
+  *shmid = shmget(key,SHSIZE,IPC_CREAT | 0666);
+  if(*shmid < 0){
     perror("shmget");
     exit(1);
   }
 
-  char * shm = shmat(shmid,NULL,0);
+  char * shm = shmat(*shmid,NULL,0);
 
   if(shm == (char *)-1){
     perror("shmat");
@@ -250,4 +260,23 @@ void sendHashesToOutputs(int totalFiles, int hashPipe[], char * shm , sem_t *has
   }
   fclose (fp);
   free(buf);
+}
+
+void setSemaphoreValue(sem_t *sem, int value) {
+  int semval, i;
+  sem_getvalue(sem, &semval);
+  int waits = semval - value;
+  if (waits >= 0)
+  {
+    for (i = 0; i < waits; ++i)
+    {
+      sem_wait(sem);
+    }
+  } else {
+    waits = waits * -1;
+    for (i = 0; i < waits; ++i)
+    {
+      sem_post(sem);
+    }
+  }
 }

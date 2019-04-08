@@ -28,7 +28,7 @@ if [[ $* == *--dev* ]]; then
 
 elif [[ $* == *--test* ]]; then
 	rm outputs/* > /dev/null 2>/dev/null	
-
+	rm test -R > /dev/null 2>/dev/null	
 
 	# Generate random files
 	mkdir test
