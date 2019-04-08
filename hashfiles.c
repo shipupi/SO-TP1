@@ -27,8 +27,8 @@ int main (int argc, char *argv[]){
   fflush(stdout); // Must flush instantly to let view process know the PID
 
   // Init semaphores (Also empty semahphores to avoid previous crashes conflicts?)
-  sem_t *hashReadySemaphore = sem_open("hashReadySemaphore", O_CREAT, 0644, 0);
-  sem_t *shmReadySemaphore = sem_open("shmReadySemaphore", O_CREAT, 0644, 0);
+  sem_t *hashReadySemaphore = sem_open(HASHREADYSEM, O_CREAT, 0644, 0);
+  sem_t *shmReadySemaphore = sem_open(SHMREADYSEM, O_CREAT, 0644, 0);
 
   sleep(1); // wait for view
 
@@ -48,8 +48,8 @@ int main (int argc, char *argv[]){
 
   // Semaphore init
   // Closing the semaphore to avoid previous non-closed semaphores conflicts
-  sem_unlink("filePipeReadySemaphore");
-  sem_t *filePipeReadySemaphore = sem_open("filePipeReadySemaphore", O_CREAT, 0644, 1);
+  sem_unlink(FILEPIPEREADYSEM);
+  sem_t *filePipeReadySemaphore = sem_open(FILEPIPEREADYSEM, O_CREAT, 0644, 1);
   
   // Create slaves
   createSlaves(argv[0], numberOfSlaves, hashPipe, filePipe, slaveIds);
@@ -65,10 +65,10 @@ int main (int argc, char *argv[]){
   close(hashPipe[0]);
   close(filePipe[1]);
   sem_close(filePipeReadySemaphore);
-  sem_unlink("filePipeReadySemaphore");
+  sem_unlink(FILEPIPEREADYSEM);
   sem_close(shmReadySemaphore);
   shmdt(shm);
-   sem_close(hashReadySemaphore);
+  sem_close(hashReadySemaphore);
   return 0;
 }
 
@@ -131,7 +131,7 @@ void killChilds(pid_t pids[], int numberOfSlaves) {
 
 char * initSharedMemory(sem_t * shmReadySemaphore) {
   // share memory set up
-  key_t key = ftok("./hashfiles.fl",1337); 
+  key_t key = ftok(SHMKEYSTR,SHMKEYNUM); 
   if(key == -1){
     perror("ftok");
     exit(1);

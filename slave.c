@@ -30,7 +30,7 @@ Pipes in slave:
 int main (int argc, char *argv[]){
 
 // Semaphore init
-  sem_t *filePipeReadySemaphore = sem_open("filePipeReadySemaphore", O_RDWR);
+  sem_t *filePipeReadySemaphore = sem_open(FILEPIPEREADYSEM, O_RDWR);
 
 // Variable definitions
   char *buf;
@@ -74,7 +74,7 @@ int main (int argc, char *argv[]){
       if (buf[0] != 0)
       {
         // Return to parent
-        write(1, buf,BUFFERSIZE);
+        write(1, buf,BUFFERSIZE);//write in stdout to hashfile.c
       }
       // Cleanup
       // fprintf(stderr, "%d: %s\n", getpid(), buf);

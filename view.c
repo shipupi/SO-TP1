@@ -28,7 +28,7 @@ int main(int argc,char * argv[]){
     struct timespec tm;
     int semval;
 	int shmid;
-	key_t key = ftok("./hashfiles.fl",1337); 
+	key_t key = ftok(SHMKEYSTR,SHMKEYNUM); 
 	char  * shm;
 	char * s;
 	int offset = 0;
@@ -36,8 +36,8 @@ int main(int argc,char * argv[]){
 	int i;
 
 	// Init semaphores
-	sem_t *hashReadySemaphore = sem_open("hashReadySemaphore", O_CREAT, 0644, 0);
-	sem_t *shmReadySemaphore = sem_open("shmReadySemaphore", O_CREAT, 0644, 0);
+	sem_t *hashReadySemaphore = sem_open(HASHREADYSEM, O_CREAT, 0644, 0);
+	sem_t *shmReadySemaphore = sem_open(SHMREADYSEM, O_CREAT, 0644, 0);
 
 	sem_wait(shmReadySemaphore);
 	shmid = shmget(key,SHSIZE,0666);
@@ -92,9 +92,9 @@ int main(int argc,char * argv[]){
 	shmdt(shm);
 	shmctl(shmid,IPC_RMID,NULL); 
 	sem_close(hashReadySemaphore);
-	sem_unlink("hashReadySemaphore");
+	sem_unlink(HASHREADYSEM);
 	sem_close(shmReadySemaphore);
-	sem_unlink("shmReadySemaphore");
+	sem_unlink(SHMREADYSEM);
 	return 0;
 }
 
